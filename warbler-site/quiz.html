@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz — Bird ID</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="index.html">🐦 Bird ID Quiz</a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="study.html">Study</a>
+    <a href="quiz.html" class="active">Quiz</a>
+    <a href="admin/index.html">Admin</a>
+  </nav>
+</header>
+
+<div class="container">
+<div class="quiz-wrap">
+
+  <!-- SETUP SCREEN -->
+  <div id="screen-setup">
+    <div class="page-title">
+      <h1>Quiz setup</h1>
+      <p>Choose your options, then start.</p>
+    </div>
+    <div class="card">
+      <div class="form-group">
+        <label>Quiz mode</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="mode-selector">
+          <button class="audio-tab active" data-mode="image"  onclick="setMode('image')">📷 Images</button>
+          <button class="audio-tab"        data-mode="song"   onclick="setMode('song')">🎵 Songs</button>
+          <button class="audio-tab"        data-mode="call"   onclick="setMode('call')">🔊 Calls / chips</button>
+          <button class="audio-tab"        data-mode="mixed"  onclick="setMode('mixed')">🔀 Mixed</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Family</label>
+          <select id="setup-family"><option value="">All families</option></select>
+        </div>
+        <div class="form-group">
+          <label>Region</label>
+          <select id="setup-region"><option value="">All regions</option></select>
+        </div>
+        <div class="form-group">
+          <label>Month</label>
+          <select id="setup-month"><option value="">All months</option></select>
+        </div>
+        <div class="form-group">
+          <label>Questions</label>
+          <select id="setup-count">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="all">All birds</option>
+          </select>
+        </div>
+      </div>
+      <div id="setup-error" class="alert alert-error" style="display:none;"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="startQuiz()">Start quiz</button>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div id="screen-loading" style="display:none;">
+    <div class="loading-overlay"><div class="spinner"></div><p>Loading your quiz…</p></div>
+  </div>
+
+  <!-- QUESTION SCREEN -->
+  <div id="screen-question" style="display:none;">
+    <div class="quiz-meta">
+      <span id="q-counter">Question 1 of 10</span>
+      <span id="q-score">Score: 0</span>
+    </div>
+    <div class="quiz-progress"><div class="quiz-progress-bar" id="q-progress" style="width:0%"></div></div>
+
+    <!-- Image area -->
+    <div id="q-image-area" style="display:none;">
+      <div class="quiz-img-wrap">
+        <img id="q-img" class="quiz-img" src="" alt="Identify this bird" />
+        <span class="quiz-credit" id="q-credit"></span>
+      </div>
+    </div>
+
+    <!-- Audio area -->
+    <div id="q-audio-area" style="display:none;">
+      <div class="audio-quiz-box">
+        <button class="play-btn-lg" id="q-play-btn" onclick="toggleQuizAudio()">
+          <svg width="26" height="26" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="white"/></svg>
+        </button>
+        <div style="font-size:13px;color:var(--text-muted);" id="q-audio-status">Tap to play</div>
+        <audio id="q-audio" preload="auto"></audio>
+      </div>
+    </div>
+
+    <div class="choices-grid" id="q-choices"></div>
+    <div class="quiz-feedback" id="q-feedback" style="display:none;"></div>
+    <button class="btn btn-primary quiz-next" id="q-next" style="display:none;" onclick="nextQuestion()">Next →</button>
+  </div>
+
+  <!-- RESULTS SCREEN -->
+  <div id="screen-results" style="display:none;">
+    <div class="card score-screen">
+      <div class="score-big" id="r-score">0/10</div>
+      <div class="score-label" id="r-msg"></div>
+      <div class="result-list" id="r-list"></div>
+      <div class="flex gap-2 justify-between flex-wrap">
+        <button class="btn" onclick="restartQuiz()">Play again</button>
+        <button class="btn" onclick="studyMissed()">Study missed birds</button>
+        <button class="btn" onclick="goSetup()">Change settings</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase.js"></script>
+<script>
+let allBirds = [];
+let quizPool  = [];
+let questions = [];
+let qIdx      = 0;
+let score     = 0;
+let answered  = false;
+let results   = [];
+let missed    = [];
+let quizMode  = "image";
+let currentAudio = null;
+
+// Read mode from URL param
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("mode")) setMode(urlParams.get("mode"));
+
+async function loadBirds() {
+  const { data } = await supabase.from("birds").select("*").order("common_name");
+  allBirds = data || [];
+  populateSetupFilters();
+}
+
+function populateSetupFilters() {
+  const families = [...new Set(allBirds.map(b=>b.family).filter(Boolean))].sort();
+  const regions  = [...new Set(allBirds.map(b=>b.region).filter(Boolean))].sort();
+  const months   = [...new Set(allBirds.map(b=>b.month).filter(Boolean))].sort();
+  const sf=document.getElementById("setup-family");
+  const sr=document.getElementById("setup-region");
+  const sm=document.getElementById("setup-month");
+  families.forEach(f=>sf.innerHTML+=`<option>${f}</option>`);
+  regions.forEach(r =>sr.innerHTML+=`<option>${r}</option>`);
+  months.forEach(m  =>sm.innerHTML+=`<option>${m}</option>`);
+}
+
+function setMode(m) {
+  quizMode = m;
+  document.querySelectorAll("[data-mode]").forEach(btn=>{
+    btn.classList.toggle("active", btn.dataset.mode===m);
+  });
+}
+
+function shuffle(arr) {
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}
+  return a;
+}
+
+function parseUrls(str) {
+  try { const v=JSON.parse(str||"[]"); return Array.isArray(v)?v:[]; } catch{ return []; }
+}
+
+function pickAudioUrl(bird, mode) {
+  if (mode==="song") return parseUrls(bird.song_urls)[0]||null;
+  if (mode==="call") return parseUrls(bird.call_urls)[0]||null;
+  // mixed or fallback: try song first, then call
+  return parseUrls(bird.song_urls)[0] || parseUrls(bird.call_urls)[0] || null;
+}
+
+async function startQuiz() {
+  const errEl = document.getElementById("setup-error");
+  errEl.style.display="none";
+  const fam   = document.getElementById("setup-family").value;
+  const reg   = document.getElementById("setup-region").value;
+  const mon   = document.getElementById("setup-month").value;
+  const count = document.getElementById("setup-count").value;
+
+  quizPool = allBirds.filter(b =>
+    (!fam || b.family===fam) &&
+    (!reg || b.region===reg) &&
+    (!mon || b.month===mon)
+  );
+
+  // Filter pool by whether the mode has usable content
+  if (quizMode==="image") quizPool = quizPool.filter(b=>parseUrls(b.image_urls).length>0);
+  if (quizMode==="song")  quizPool = quizPool.filter(b=>parseUrls(b.song_urls).length>0);
+  if (quizMode==="call")  quizPool = quizPool.filter(b=>parseUrls(b.call_urls).length>0);
+  if (quizMode==="mixed") quizPool = quizPool.filter(b=>parseUrls(b.image_urls).length>0||parseUrls(b.song_urls).length>0||parseUrls(b.call_urls).length>0);
+
+  if (quizPool.length < 4) {
+    errEl.style.display="block";
+    errEl.textContent = `Not enough birds with ${quizMode} content for those filters (need at least 4, found ${quizPool.length}). Add more birds in Admin, or change your filters.`;
+    return;
+  }
+
+  const n = count==="all" ? quizPool.length : Math.min(parseInt(count), quizPool.length);
+  questions = shuffle(quizPool).slice(0, n);
+  qIdx=0; score=0; answered=false; results=[]; missed=[];
+
+  show("screen-loading");
+  await new Promise(r=>setTimeout(r,300)); // brief visual pause
+  show("screen-question");
+  renderQuestion();
+}
+
+function show(id) {
+  ["screen-setup","screen-loading","screen-question","screen-results"].forEach(s=>{
+    document.getElementById(s).style.display = s===id?"block":"none";
+  });
+}
+
+function renderQuestion() {
+  answered = false;
+  const bird = questions[qIdx];
+  document.getElementById("q-counter").textContent  = `Question ${qIdx+1} of ${questions.length}`;
+  document.getElementById("q-score").textContent    = `Score: ${score}`;
+  document.getElementById("q-progress").style.width = `${(qIdx/questions.length)*100}%`;
+  document.getElementById("q-feedback").style.display = "none";
+  document.getElementById("q-next").style.display     = "none";
+
+  // Stop any playing audio
+  if (currentAudio) { currentAudio.pause(); currentAudio=null; }
+
+  // Determine actual mode for this question (for mixed)
+  let actualMode = quizMode;
+  if (quizMode==="mixed") {
+    const hasSong  = parseUrls(bird.song_urls).length>0;
+    const hasCall  = parseUrls(bird.call_urls).length>0;
+    const hasImg   = parseUrls(bird.image_urls).length>0;
+    const options  = [];
+    if (hasImg)  options.push("image");
+    if (hasSong) options.push("song");
+    if (hasCall) options.push("call");
+    actualMode = options[Math.floor(Math.random()*options.length)];
+  }
+  bird._actualMode = actualMode;
+
+  if (actualMode==="image") {
+    document.getElementById("q-image-area").style.display="block";
+    document.getElementById("q-audio-area").style.display="none";
+    const imgs  = parseUrls(bird.image_urls);
+    const img   = imgs[Math.floor(Math.random()*imgs.length)];
+    document.getElementById("q-img").src = img;
+    document.getElementById("q-credit").textContent = "";
+  } else {
+    document.getElementById("q-image-area").style.display="none";
+    document.getElementById("q-audio-area").style.display="block";
+    const url = pickAudioUrl(bird, actualMode);
+    const audio = document.getElementById("q-audio");
+    audio.src = url||"";
+    const modeLabel = actualMode==="song" ? "song" : "call / chip";
+    document.getElementById("q-audio-status").textContent = url ? `Tap to play — identify by ${modeLabel}` : "No recording available";
+    document.getElementById("q-play-btn").innerHTML=`<svg width="26" height="26" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="white"/></svg>`;
+    currentAudio = audio;
+  }
+
+  // Build choices — always pick distractors from full pool for variety
+  const distractorPool = allBirds.filter(b=>b.id!==bird.id);
+  const wrongs = shuffle(distractorPool).slice(0,3);
+  const opts   = shuffle([bird,...wrongs]);
+  document.getElementById("q-choices").innerHTML = opts.map(opt=>`
+    <button class="choice" onclick="handleAnswer('${opt.common_name}','${bird.common_name}',${bird.id})">
+      ${opt.common_name}
+    </button>`).join("");
+}
+
+function toggleQuizAudio() {
+  const audio = document.getElementById("q-audio");
+  const btn   = document.getElementById("q-play-btn");
+  const status= document.getElementById("q-audio-status");
+  if (!audio.src) return;
+  if (audio.paused) {
+    audio.play().catch(()=>{});
+    btn.innerHTML=`<svg width="26" height="26" viewBox="0 0 24 24"><rect x="5" y="3" width="4" height="18" fill="white"/><rect x="15" y="3" width="4" height="18" fill="white"/></svg>`;
+    status.textContent="Playing…";
+    audio.onended=()=>{
+      btn.innerHTML=`<svg width="26" height="26" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="white"/></svg>`;
+      status.textContent="Tap to replay";
+    };
+  } else {
+    audio.pause();
+    btn.innerHTML=`<svg width="26" height="26" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21" fill="white"/></svg>`;
+    status.textContent="Tap to play";
+  }
+}
+
+function handleAnswer(chosen, correct, birdId) {
+  if (answered) return;
+  answered = true;
+  const ok = chosen===correct;
+  if (ok) score++;
+  else if (!missed.includes(correct)) missed.push(correct);
+  const bird = questions[qIdx];
+  results.push({question:correct, chosen, correct:ok, marks:bird.field_marks||""});
+
+  document.querySelectorAll(".choice").forEach(btn=>{
+    btn.disabled=true;
+    if (btn.textContent.trim()===correct) btn.classList.add("correct");
+    else if (btn.textContent.trim()===chosen&&!ok) btn.classList.add("wrong");
+  });
+
+  const fb=document.getElementById("q-feedback");
+  fb.style.display="block"; fb.className="quiz-feedback "+(ok?"correct":"wrong");
+  fb.innerHTML = ok
+    ? `<strong>Correct!</strong> That's a ${correct}.${bird.field_marks?`<br><span style="font-size:13px;opacity:0.85;">Key marks: ${bird.field_marks}</span>`:""}`
+    : `<strong>That's a ${correct}</strong>, not a ${chosen}.${bird.field_marks?`<br><span style="font-size:13px;opacity:0.85;">Key marks: ${bird.field_marks}</span>`:""}`;
+
+  const nextBtn=document.getElementById("q-next");
+  nextBtn.style.display="block";
+  nextBtn.textContent = qIdx<questions.length-1 ? "Next →" : "See results";
+  document.getElementById("q-score").textContent=`Score: ${score}`;
+}
+
+function nextQuestion() {
+  if (currentAudio) { currentAudio.pause(); }
+  qIdx++;
+  if (qIdx>=questions.length) showResults();
+  else renderQuestion();
+}
+
+function showResults() {
+  document.getElementById("q-progress").style.width="100%";
+  show("screen-results");
+  document.getElementById("r-score").textContent=`${score}/${questions.length}`;
+  const pct=score/questions.length;
+  document.getElementById("r-msg").textContent =
+    pct===1?"Perfect score! Outstanding." :
+    pct>=0.8?"Great job — you're getting sharp!" :
+    pct>=0.6?"Pretty good — keep at it." :
+    pct>=0.4?"Nice start — these birds are tricky." :
+    "Keep practicing — it'll click soon!";
+  document.getElementById("r-list").innerHTML = results.map(r=>`
+    <div class="result-item">
+      <div class="result-dot ${r.correct?"ok":"no"}">${r.correct?"✓":"✗"}</div>
+      <div style="flex:1;">${r.question}</div>
+      ${!r.correct?`<div style="font-size:12px;color:var(--text-muted);">said: ${r.chosen}</div>`:""}
+    </div>`).join("");
+}
+
+function restartQuiz()  { startQuiz(); }
+function goSetup()      { if(currentAudio)currentAudio.pause(); show("screen-setup"); }
+function studyMissed()  { 
+  const params = missed.map(n=>`name=${encodeURIComponent(n)}`).join("&");
+  window.location.href = `study.html?missed=1&${params}`;
+}
+
+loadBirds();
+</script>
+</body>
+</html>

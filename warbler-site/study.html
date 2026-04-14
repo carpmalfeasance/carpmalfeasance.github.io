@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study Guide — Bird ID</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="index.html">🐦 Bird ID Quiz</a>
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="study.html" class="active">Study</a>
+    <a href="quiz.html">Quiz</a>
+    <a href="admin/index.html">Admin</a>
+  </nav>
+</header>
+
+<div class="container-wide">
+
+  <!-- GRID VIEW -->
+  <div id="view-grid">
+    <div class="flex items-center justify-between flex-wrap gap-3" style="margin-bottom:1.25rem;">
+      <div class="page-title" style="margin-bottom:0;">
+        <h1>Study guide</h1>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <input id="search" type="text" placeholder="Search…"
+          style="padding:8px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius);width:180px;background:var(--surface);color:var(--text);"
+          oninput="filterBirds()" />
+        <select id="filter-family" onchange="filterBirds()"
+          style="padding:8px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);">
+          <option value="">All families</option>
+        </select>
+        <select id="filter-region" onchange="filterBirds()"
+          style="padding:8px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);">
+          <option value="">All regions</option>
+        </select>
+        <select id="filter-month" onchange="filterBirds()"
+          style="padding:8px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);">
+          <option value="">All months</option>
+        </select>
+        <select id="sort-by" onchange="filterBirds()"
+          style="padding:8px 12px;font-size:14px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);">
+          <option value="alpha">A–Z</option>
+          <option value="sci">By genus</option>
+          <option value="family">By family</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="grid-loading" class="loading-overlay"><div class="spinner"></div><p>Loading birds…</p></div>
+    <div id="bird-grid" class="study-grid" style="display:none;"></div>
+    <div id="grid-empty" class="empty-state" style="display:none;">
+      <div class="empty-icon">🔍</div>
+      <p>No birds found. Try a different filter.</p>
+    </div>
+  </div>
+
+  <!-- DETAIL VIEW -->
+  <div id="view-detail" style="display:none; max-width:720px; margin:0 auto;">
+    <button class="btn btn-sm" onclick="showGrid()" style="margin-bottom:1.25rem;">← Back to grid</button>
+    <div id="detail-content"></div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase.js"></script>
+<script>
+let allBirds = [];
+let currentDetailImgIdx = 0;
+let currentDetailImgs = [];
+let activeMiniAudio = null;
+
+async function init() {
+  const { data, error } = await supabase.from("birds").select("*").order("common_name");
+  document.getElementById("grid-loading").style.display = "none";
+  if (error || !data.length) { document.getElementById("grid-empty").style.display = "block"; return; }
+  allBirds = data;
+  populateFilters(data);
+  renderGrid(data);
+}
+
+function populateFilters(birds) {
+  const families = [...new Set(birds.map(b=>b.family).filter(Boolean))].sort();
+  const regions  = [...new Set(birds.map(b=>b.region).filter(Boolean))].sort();
+  const months   = [...new Set(birds.map(b=>b.month).filter(Boolean))].sort();
+  const selF = document.getElementById("filter-family");
+  const selR = document.getElementById("filter-region");
+  const selM = document.getElementById("filter-month");
+  families.forEach(f => selF.innerHTML += `<option>${f}</option>`);
+  regions.forEach(r  => selR.innerHTML += `<option>${r}</option>`);
+  months.forEach(m   => selM.innerHTML += `<option>${m}</option>`);
+}
+
+function filterBirds() {
+  const q   = document.getElementById("search").value.toLowerCase();
+  const fam = document.getElementById("filter-family").value;
+  const reg = document.getElementById("filter-region").value;
+  const mon = document.getElementById("filter-month").value;
+  const srt = document.getElementById("sort-by").value;
+  let birds = allBirds.filter(b =>
+    (!q   || b.common_name.toLowerCase().includes(q) || (b.scientific_name||"").toLowerCase().includes(q)) &&
+    (!fam || b.family === fam) &&
+    (!reg || b.region === reg) &&
+    (!mon || b.month  === mon)
+  );
+  birds.sort((a,b) =>
+    srt==="sci"    ? (a.scientific_name||"").localeCompare(b.scientific_name||"") :
+    srt==="family" ? (a.family||"").localeCompare(b.family||"") :
+    a.common_name.localeCompare(b.common_name)
+  );
+  renderGrid(birds);
+}
+
+function firstImg(bird) {
+  try {
+    const urls = JSON.parse(bird.image_urls||"[]");
+    return urls[0] || null;
+  } catch { return null; }
+}
+
+function renderGrid(birds) {
+  const grid  = document.getElementById("bird-grid");
+  const empty = document.getElementById("grid-empty");
+  if (!birds.length) { grid.style.display="none"; empty.style.display="block"; return; }
+  empty.style.display = "none";
+  grid.style.display  = "grid";
+  grid.innerHTML = birds.map(bird => {
+    const img = firstImg(bird);
+    return `<div class="study-card" onclick='openDetail(${bird.id})'>
+      ${img
+        ? `<img src="${img}" alt="${bird.common_name}" loading="lazy" onerror="this.parentElement.querySelector('.no-img-card').style.display='flex';this.style.display='none';" /><div class="no-img-card" style="display:none;">🐦</div>`
+        : `<div class="no-img-card">🐦</div>`}
+      <div class="study-card-body">
+        <div class="study-card-name">${bird.common_name}</div>
+        <div class="study-card-sci">${bird.scientific_name||""}</div>
+        ${bird.family ? `<span class="badge badge-green mt-1">${bird.family}</span>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function openDetail(id) {
+  const bird = allBirds.find(b=>b.id===id);
+  if (!bird) return;
+  if (activeMiniAudio) { activeMiniAudio.pause(); activeMiniAudio=null; }
+  currentDetailImgIdx = 0;
+  try { currentDetailImgs = JSON.parse(bird.image_urls||"[]"); } catch { currentDetailImgs=[]; }
+  renderDetail(bird);
+  document.getElementById("view-grid").style.display   = "none";
+  document.getElementById("view-detail").style.display = "block";
+  window.scrollTo(0,0);
+}
+
+function renderDetail(bird) {
+  const imgs = currentDetailImgs;
+  const img  = imgs[currentDetailImgIdx];
+  let songUrls=[],callUrls=[];
+  try { songUrls = JSON.parse(bird.song_urls||"[]"); } catch{}
+  try { callUrls = JSON.parse(bird.call_urls||"[]"); } catch{}
+
+  document.getElementById("detail-content").innerHTML = `
+    ${img ? `
+      <div class="detail-img-wrap" style="position:relative;margin-bottom:1rem;">
+        <img class="img-thumb-lg" src="${img}" alt="${bird.common_name}" />
+      </div>
+      ${imgs.length>1 ? `<div class="detail-img-nav">
+        <button onclick="changeDetailImg(-1)" ${currentDetailImgIdx===0?"disabled":""}>← Prev</button>
+        <span>${currentDetailImgIdx+1} / ${imgs.length} photos</span>
+        <button onclick="changeDetailImg(1)" ${currentDetailImgIdx===imgs.length-1?"disabled":""}>Next →</button>
+      </div>` : ""}` : `<div style="height:180px;background:var(--bg);border-radius:var(--radius);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:40px;margin-bottom:1rem;">🐦</div>`}
+
+    <h2 style="margin-top:1.25rem;">${bird.common_name}</h2>
+    <p style="font-style:italic;margin-bottom:1rem;">${bird.scientific_name||""}</p>
+
+    <div class="fact-row">
+      ${bird.family  ? `<div class="fact-chip"><strong>Family</strong>${bird.family}</div>` : ""}
+      ${bird.region  ? `<div class="fact-chip"><strong>Region</strong>${bird.region}</div>` : ""}
+      ${bird.season  ? `<div class="fact-chip"><strong>Season</strong>${bird.season}</div>` : ""}
+      ${bird.month   ? `<div class="fact-chip"><strong>Month</strong>${bird.month}</div>`  : ""}
+      ${bird.habitat ? `<div class="fact-chip"><strong>Habitat</strong>${bird.habitat}</div>` : ""}
+    </div>
+
+    ${bird.field_marks ? `<div class="card mt-2"><h3>Field marks</h3><p style="margin-top:6px;">${bird.field_marks}</p></div>` : ""}
+    ${bird.description ? `<div class="card mt-2"><h3>Description</h3><p style="margin-top:6px;">${bird.description}</p></div>` : ""}
+
+    ${songUrls.length ? `
+      <div class="card mt-2">
+        <h3 style="margin-bottom:10px;">Song</h3>
+        ${bird.song_description ? `<p style="margin-bottom:10px;font-size:13px;">${bird.song_description}</p>` : ""}
+        ${songUrls.map((url,i)=>`
+          <div class="audio-pill">
+            <button class="play-btn-sm" onclick="toggleAudio('song-${i}','${url}',this)" aria-label="Play song">
+              <svg width="12" height="12" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+            </button>
+            <div><div class="audio-label">Song recording ${i+1}</div><span class="audio-sub">Tap to play</span></div>
+            <audio id="song-${i}" src="${url}" preload="none"></audio>
+          </div>`).join("")}
+      </div>` : ""}
+
+    ${callUrls.length ? `
+      <div class="card mt-2">
+        <h3 style="margin-bottom:10px;">Call / chip</h3>
+        ${bird.call_description ? `<p style="margin-bottom:10px;font-size:13px;">${bird.call_description}</p>` : ""}
+        ${callUrls.map((url,i)=>`
+          <div class="audio-pill">
+            <button class="play-btn-sm" onclick="toggleAudio('call-${i}','${url}',this)" aria-label="Play call">
+              <svg width="12" height="12" viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg>
+            </button>
+            <div><div class="audio-label">Call recording ${i+1}</div><span class="audio-sub">Tap to play</span></div>
+            <audio id="call-${i}" src="${url}" preload="none"></audio>
+          </div>`).join("")}
+      </div>` : ""}
+  `;
+}
+
+function changeDetailImg(dir) {
+  currentDetailImgIdx = Math.max(0, Math.min(currentDetailImgIdx+dir, currentDetailImgs.length-1));
+  const bird = allBirds.find(b=>b.id===parseInt(document.getElementById("detail-content").querySelector("h2").textContent) || b.common_name === document.getElementById("detail-content").querySelector("h2").textContent);
+  // Re-render just the image section by re-rendering whole detail
+  const id = allBirds.findIndex(b=>b.common_name===document.getElementById("detail-content").querySelector("h2").innerText);
+  renderDetail(allBirds.find(b=>currentDetailImgs===(() => { try{ return JSON.parse(b.image_urls||"[]"); }catch{return[];} })())) ;
+}
+
+function showGrid() {
+  if (activeMiniAudio) { activeMiniAudio.pause(); activeMiniAudio=null; }
+  document.querySelectorAll("audio").forEach(a=>a.pause());
+  document.getElementById("view-detail").style.display = "none";
+  document.getElementById("view-grid").style.display   = "block";
+}
+
+function toggleAudio(audioId, url, btn) {
+  const audio = document.getElementById(audioId);
+  if (!audio) return;
+  if (activeMiniAudio && activeMiniAudio !== audio) {
+    activeMiniAudio.pause();
+    document.querySelectorAll(".play-btn-sm svg").forEach(s=>{
+      s.innerHTML='<polygon points="5,3 19,12 5,21"/>';
+    });
+  }
+  if (audio.paused) {
+    audio.src = url;
+    audio.play().catch(()=>{});
+    btn.querySelector("svg").innerHTML='<rect x="5" y="3" width="4" height="18"/><rect x="15" y="3" width="4" height="18"/>';
+    activeMiniAudio = audio;
+    audio.onended = () => { btn.querySelector("svg").innerHTML='<polygon points="5,3 19,12 5,21"/>'; };
+  } else {
+    audio.pause();
+    btn.querySelector("svg").innerHTML='<polygon points="5,3 19,12 5,21"/>';
+  }
+}
+
+// Fix openDetail to store current bird id
+function openDetail(id) {
+  const bird = allBirds.find(b=>b.id===id);
+  if (!bird) return;
+  if (activeMiniAudio) { activeMiniAudio.pause(); activeMiniAudio=null; }
+  currentDetailImgIdx = 0;
+  try { currentDetailImgs = JSON.parse(bird.image_urls||"[]"); } catch { currentDetailImgs=[]; }
+  window._currentDetailBird = bird;
+  renderDetail(bird);
+  document.getElementById("view-grid").style.display   = "none";
+  document.getElementById("view-detail").style.display = "block";
+  window.scrollTo(0,0);
+}
+
+function changeDetailImg(dir) {
+  currentDetailImgIdx = Math.max(0, Math.min(currentDetailImgIdx+dir, currentDetailImgs.length-1));
+  renderDetail(window._currentDetailBird);
+}
+
+init();
+</script>
+</body>
+</html>

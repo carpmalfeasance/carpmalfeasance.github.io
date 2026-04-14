@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bird ID Quiz</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="index.html">🐦 Bird ID Quiz</a>
+  <nav>
+    <a href="index.html" class="active">Home</a>
+    <a href="study.html">Study</a>
+    <a href="quiz.html">Quiz</a>
+    <a href="admin/index.html">Admin</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Bird ID Quiz</h1>
+  <p>Study birds by image or sound, then quiz yourself. Built for Maryland warblers — and growing.</p>
+</div>
+
+<div class="container">
+  <div class="mode-cards">
+    <a class="mode-card-big" href="study.html">
+      <div class="mc-icon">📖</div>
+      <h3>Study guide</h3>
+      <p>Browse all birds, view photos, and listen to songs and calls at your own pace.</p>
+    </a>
+    <a class="mode-card-big" href="quiz.html?mode=image">
+      <div class="mc-icon">📷</div>
+      <h3>Image quiz</h3>
+      <p>Identify birds from photos. Choose your region, family, and season.</p>
+    </a>
+    <a class="mode-card-big" href="quiz.html?mode=song">
+      <div class="mc-icon">🎵</div>
+      <h3>Song quiz</h3>
+      <p>Identify birds by their full territorial song.</p>
+    </a>
+    <a class="mode-card-big" href="quiz.html?mode=call">
+      <div class="mc-icon">🔊</div>
+      <h3>Call / chip quiz</h3>
+      <p>The harder challenge — identify birds by their short chip notes.</p>
+    </a>
+  </div>
+
+  <div id="stats-row" class="flex gap-3 flex-wrap" style="margin-bottom:2rem; justify-content:center;"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/supabase.js"></script>
+<script>
+async function loadStats() {
+  const { data, error } = await supabase.from("birds").select("family, region");
+  if (error || !data) return;
+  const total = data.length;
+  const families = [...new Set(data.map(b => b.family).filter(Boolean))].length;
+  const regions  = [...new Set(data.map(b => b.region).filter(Boolean))].length;
+  document.getElementById("stats-row").innerHTML = [
+    [total,    "birds"],
+    [families, "families"],
+    [regions,  "regions"]
+  ].map(([n,l]) => `
+    <div class="card" style="text-align:center;min-width:110px;padding:1rem 1.5rem;">
+      <div style="font-size:28px;font-weight:700;color:var(--green);">${n}</div>
+      <div style="font-size:13px;color:var(--text-muted);">${l}</div>
+    </div>`).join("");
+}
+loadStats();
+</script>
+</body>
+</html>

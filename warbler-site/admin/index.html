@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin — Bird ID</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <a class="logo" href="../index.html">🐦 Bird ID Quiz</a>
+  <nav>
+    <a href="../index.html">Home</a>
+    <a href="../study.html">Study</a>
+    <a href="../quiz.html">Quiz</a>
+    <a href="index.html" class="active">Admin</a>
+  </nav>
+</header>
+
+<div class="container-wide">
+
+  <div class="flex items-center justify-between flex-wrap gap-3" style="margin-bottom:1.5rem;">
+    <div class="page-title" style="margin-bottom:0;">
+      <h1>Bird management</h1>
+      <p>Add, edit, and upload photos and audio for your birds.</p>
+    </div>
+    <button class="btn btn-primary" onclick="openForm()">+ Add new bird</button>
+  </div>
+
+  <div id="alert-area"></div>
+
+  <!-- Bird list table -->
+  <div class="card" style="padding:0;">
+    <div id="table-loading" class="loading-overlay"><div class="spinner"></div><p>Loading…</p></div>
+    <div class="table-wrap" id="table-wrap" style="display:none;">
+      <table>
+        <thead>
+          <tr>
+            <th>Photo</th>
+            <th>Common name</th>
+            <th>Scientific name</th>
+            <th>Family</th>
+            <th>Region</th>
+            <th>Month</th>
+            <th>Images</th>
+            <th>Songs</th>
+            <th>Calls</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="birds-tbody"></tbody>
+      </table>
+    </div>
+    <div id="table-empty" class="empty-state" style="display:none;">
+      <div class="empty-icon">🐦</div>
+      <p>No birds yet. Click "Add new bird" to get started.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── MODAL OVERLAY ── -->
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;overflow-y:auto;padding:2rem 1rem;">
+  <div style="max-width:680px;margin:0 auto;background:var(--surface);border-radius:var(--radius-lg);padding:2rem;position:relative;">
+    <div class="flex items-center justify-between" style="margin-bottom:1.5rem;">
+      <h2 id="modal-title">Add bird</h2>
+      <button class="btn btn-sm" onclick="closeForm()">✕ Close</button>
+    </div>
+
+    <div id="modal-alert"></div>
+
+    <form id="bird-form" onsubmit="saveBird(event)">
+      <input type="hidden" id="f-id" />
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Common name *</label>
+          <input type="text" id="f-common" required placeholder="e.g. Pine Warbler" />
+        </div>
+        <div class="form-group">
+          <label>Scientific name</label>
+          <input type="text" id="f-sci" placeholder="e.g. Setophaga pinus" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Family</label>
+          <input type="text" id="f-family" placeholder="e.g. Warbler" />
+        </div>
+        <div class="form-group">
+          <label>Region</label>
+          <input type="text" id="f-region" placeholder="e.g. Maryland" />
+        </div>
+        <div class="form-group">
+          <label>Month</label>
+          <input type="text" id="f-month" placeholder="e.g. May" />
+        </div>
+        <div class="form-group">
+          <label>Season</label>
+          <input type="text" id="f-season" placeholder="e.g. Summer breeder" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Habitat</label>
+        <input type="text" id="f-habitat" placeholder="e.g. Pine forests, forest edge" />
+      </div>
+      <div class="form-group">
+        <label>Field marks</label>
+        <textarea id="f-marks" placeholder="Key visual ID features…"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="f-desc" rows="4" placeholder="Longer description of the bird…"></textarea>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Images upload -->
+      <div class="form-group">
+        <label>Photos</label>
+        <div class="upload-zone" id="img-drop" onclick="document.getElementById('img-file-input').click()" ondragover="dragOver(event,'img-drop')" ondragleave="dragLeave('img-drop')" ondrop="dropFiles(event,'image')">
+          <div class="upload-icon">🖼</div>
+          <p>Click or drag photos here (JPG, PNG, WEBP)</p>
+        </div>
+        <input type="file" id="img-file-input" accept="image/*" multiple style="display:none;" onchange="handleFiles(this.files,'image')" />
+        <div class="file-pill-list" id="img-pills"></div>
+        <div id="img-upload-progress" style="font-size:13px;color:var(--text-muted);margin-top:6px;"></div>
+      </div>
+
+      <!-- Song upload -->
+      <div class="form-group">
+        <label>Song recordings</label>
+        <div class="upload-zone" id="song-drop" onclick="document.getElementById('song-file-input').click()" ondragover="dragOver(event,'song-drop')" ondragleave="dragLeave('song-drop')" ondrop="dropFiles(event,'song')">
+          <div class="upload-icon">🎵</div>
+          <p>Click or drag audio files here (MP3, WAV, OGG, M4A)</p>
+        </div>
+        <input type="file" id="song-file-input" accept="audio/*" multiple style="display:none;" onchange="handleFiles(this.files,'song')" />
+        <div class="file-pill-list" id="song-pills"></div>
+        <div id="song-upload-progress" style="font-size:13px;color:var(--text-muted);margin-top:6px;"></div>
+        <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+          <label>Song description (optional)</label>
+          <input type="text" id="f-song-desc" placeholder="e.g. Slow, buzzy trill, rising at end" />
+        </div>
+      </div>
+
+      <!-- Call upload -->
+      <div class="form-group">
+        <label>Call / chip recordings</label>
+        <div class="upload-zone" id="call-drop" onclick="document.getElementById('call-file-input').click()" ondragover="dragOver(event,'call-drop')" ondragleave="dragLeave('call-drop')" ondrop="dropFiles(event,'call')">
+          <div class="upload-icon">🔊</div>
+          <p>Click or drag audio files here (MP3, WAV, OGG, M4A)</p>
+        </div>
+        <input type="file" id="call-file-input" accept="audio/*" multiple style="display:none;" onchange="handleFiles(this.files,'call')" />
+        <div class="file-pill-list" id="call-pills"></div>
+        <div id="call-upload-progress" style="font-size:13px;color:var(--text-muted);margin-top:6px;"></div>
+        <div class="form-group" style="margin-top:10px;margin-bottom:0;">
+          <label>Call description (optional)</label>
+          <input type="text" id="f-call-desc" placeholder="e.g. Sharp, hard 'chip', similar to Yellow Warbler" />
+        </div>
+      </div>
+
+      <div class="flex gap-2" style="margin-top:1.5rem;">
+        <button type="submit" class="btn btn-primary" id="save-btn">Save bird</button>
+        <button type="button" class="btn" onclick="closeForm()">Cancel</button>
+        <button type="button" class="btn btn-danger" id="delete-btn" style="display:none;margin-left:auto;" onclick="deleteBird()">Delete bird</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/supabase.js"></script>
+<script>
+let allBirds = [];
+
+// Pending file URLs collected during form session
+let pendingImgUrls  = [];
+let pendingSngUrls  = [];
+let pendingCallUrls = [];
+
+// URLs already saved for current bird (when editing)
+let existingImgUrls  = [];
+let existingSngUrls  = [];
+let existingCallUrls = [];
+
+async function loadBirds() {
+  const { data } = await supabase.from("birds").select("*").order("common_name");
+  allBirds = data||[];
+  document.getElementById("table-loading").style.display="none";
+  if (!allBirds.length) {
+    document.getElementById("table-empty").style.display="block";
+  } else {
+    renderTable();
+    document.getElementById("table-wrap").style.display="block";
+  }
+}
+
+function parseUrls(str){ try{const v=JSON.parse(str||"[]");return Array.isArray(v)?v:[];}catch{return[];}}
+
+function renderTable() {
+  document.getElementById("birds-tbody").innerHTML = allBirds.map(bird => {
+    const imgs  = parseUrls(bird.image_urls);
+    const songs = parseUrls(bird.song_urls);
+    const calls = parseUrls(bird.call_urls);
+    return `<tr>
+      <td>${imgs[0]?`<img class="img-thumb" src="${imgs[0]}" alt="" />`:`<div class="no-img">🐦</div>`}</td>
+      <td><strong>${bird.common_name}</strong></td>
+      <td><span style="font-style:italic;font-size:13px;color:var(--text-muted);">${bird.scientific_name||""}</span></td>
+      <td>${bird.family?`<span class="badge badge-green">${bird.family}</span>`:""}</td>
+      <td><span class="text-sm text-muted">${bird.region||""}</span></td>
+      <td><span class="text-sm text-muted">${bird.month||""}</span></td>
+      <td><span class="badge ${imgs.length?"badge-green":"badge-gray"}">${imgs.length} photo${imgs.length!==1?"s":""}</span></td>
+      <td><span class="badge ${songs.length?"badge-green":"badge-gray"}">${songs.length} song${songs.length!==1?"s":""}</span></td>
+      <td><span class="badge ${calls.length?"badge-green":"badge-gray"}">${calls.length} call${calls.length!==1?"s":""}</span></td>
+      <td><button class="btn btn-sm" onclick="openForm(${bird.id})">Edit</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function showAlert(msg, type="success") {
+  const el = document.getElementById("alert-area");
+  el.innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+  setTimeout(()=>el.innerHTML="", 4000);
+}
+function showModalAlert(msg, type="error") {
+  document.getElementById("modal-alert").innerHTML = `<div class="alert alert-${type}">${msg}</div>`;
+}
+
+function openForm(id) {
+  pendingImgUrls=[]; pendingSngUrls=[]; pendingCallUrls=[];
+  existingImgUrls=[]; existingSngUrls=[]; existingCallUrls=[];
+  document.getElementById("modal-alert").innerHTML="";
+  document.getElementById("bird-form").reset();
+  ["img","song","call"].forEach(t=>{
+    document.getElementById(`${t}-pills`).innerHTML="";
+    document.getElementById(`${t}-upload-progress`).textContent="";
+  });
+
+  if (id) {
+    const bird = allBirds.find(b=>b.id===id);
+    if (!bird) return;
+    document.getElementById("modal-title").textContent  = "Edit bird";
+    document.getElementById("delete-btn").style.display = "inline-flex";
+    document.getElementById("f-id").value         = bird.id;
+    document.getElementById("f-common").value     = bird.common_name||"";
+    document.getElementById("f-sci").value        = bird.scientific_name||"";
+    document.getElementById("f-family").value     = bird.family||"";
+    document.getElementById("f-region").value     = bird.region||"";
+    document.getElementById("f-month").value      = bird.month||"";
+    document.getElementById("f-season").value     = bird.season||"";
+    document.getElementById("f-habitat").value    = bird.habitat||"";
+    document.getElementById("f-marks").value      = bird.field_marks||"";
+    document.getElementById("f-desc").value       = bird.description||"";
+    document.getElementById("f-song-desc").value  = bird.song_description||"";
+    document.getElementById("f-call-desc").value  = bird.call_description||"";
+    existingImgUrls  = parseUrls(bird.image_urls);
+    existingSngUrls  = parseUrls(bird.song_urls);
+    existingCallUrls = parseUrls(bird.call_urls);
+    renderExistingPills("img",  existingImgUrls,  "image");
+    renderExistingPills("song", existingSngUrls,  "song");
+    renderExistingPills("call", existingCallUrls, "call");
+  } else {
+    document.getElementById("modal-title").textContent  = "Add new bird";
+    document.getElementById("delete-btn").style.display = "none";
+    document.getElementById("f-id").value = "";
+  }
+  document.getElementById("modal-overlay").style.display="block";
+  document.body.style.overflow="hidden";
+}
+
+function closeForm() {
+  document.getElementById("modal-overlay").style.display="none";
+  document.body.style.overflow="";
+}
+
+function renderExistingPills(prefix, urls, type) {
+  const container = document.getElementById(`${prefix}-pills`);
+  container.innerHTML = urls.map((url,i) => {
+    const isImg = type==="image";
+    const name = decodeURIComponent(url.split("/").pop().split("?")[0]);
+    return `<div class="file-pill" id="${prefix}-pill-existing-${i}">
+      ${isImg ? `<img src="${url}" alt="" />` : `<span style="font-size:16px;">🎵</span>`}
+      <span>${name.substring(0,28)}${name.length>28?"…":""}</span>
+      <button type="button" onclick="removeExisting('${type}',${i})">✕</button>
+    </div>`;
+  }).join("");
+}
+
+function removeExisting(type, idx) {
+  if (type==="image") { existingImgUrls.splice(idx,1); renderExistingPills("img", existingImgUrls, "image"); }
+  if (type==="song")  { existingSngUrls.splice(idx,1); renderExistingPills("song",existingSngUrls, "song"); }
+  if (type==="call")  { existingCallUrls.splice(idx,1);renderExistingPills("call",existingCallUrls,"call"); }
+}
+
+function dragOver(e, id)  { e.preventDefault(); document.getElementById(id).classList.add("dragover"); }
+function dragLeave(id)    { document.getElementById(id).classList.remove("dragover"); }
+function dropFiles(e, type) {
+  e.preventDefault();
+  const id = type==="image"?"img-drop":type+"-drop";
+  document.getElementById(id).classList.remove("dragover");
+  handleFiles(e.dataTransfer.files, type);
+}
+
+async function handleFiles(files, type) {
+  const prefix    = type==="image"?"img":type;
+  const bucket    = type==="image"?"bird-images":type==="song"?"bird-songs":"bird-calls";
+  const progEl    = document.getElementById(`${prefix}-upload-progress`);
+  const pillsEl   = document.getElementById(`${prefix}-pills`);
+  progEl.textContent = `Uploading ${files.length} file(s)…`;
+
+  for (const file of files) {
+    const safeCommon = (document.getElementById("f-common").value||"unknown").replace(/\s+/g,"-").toLowerCase();
+    const ext        = file.name.split(".").pop();
+    const path       = `${safeCommon}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { data, error } = await supabase.storage.from(bucket).upload(path, file, { upsert:true });
+    if (error) { showModalAlert(`Upload failed: ${error.message}`); continue; }
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    const url = urlData.publicUrl;
+    if (type==="image") pendingImgUrls.push(url);
+    if (type==="song")  pendingSngUrls.push(url);
+    if (type==="call")  pendingCallUrls.push(url);
+
+    // Add pill
+    const isImg = type==="image";
+    const pill = document.createElement("div");
+    pill.className="file-pill";
+    const idx = (type==="image"?pendingImgUrls:type==="song"?pendingSngUrls:pendingCallUrls).length-1;
+    pill.innerHTML = `${isImg?`<img src="${url}" alt="" />`:`<span style="font-size:16px;">🎵</span>`}
+      <span>${file.name.substring(0,28)}${file.name.length>28?"…":""}</span>
+      <button type="button" onclick="removePending('${type}',${idx},this.closest('.file-pill'))">✕</button>`;
+    pillsEl.appendChild(pill);
+  }
+  progEl.textContent = "Upload complete ✓";
+  setTimeout(()=>progEl.textContent="", 3000);
+}
+
+function removePending(type, idx, el) {
+  if (type==="image") pendingImgUrls.splice(idx,1);
+  if (type==="song")  pendingSngUrls.splice(idx,1);
+  if (type==="call")  pendingCallUrls.splice(idx,1);
+  el.remove();
+}
+
+async function saveBird(e) {
+  e.preventDefault();
+  const btn = document.getElementById("save-btn");
+  btn.disabled=true; btn.textContent="Saving…";
+  document.getElementById("modal-alert").innerHTML="";
+
+  const allImgs  = [...existingImgUrls,  ...pendingImgUrls];
+  const allSongs = [...existingSngUrls,  ...pendingSngUrls];
+  const allCalls = [...existingCallUrls, ...pendingCallUrls];
+
+  const payload = {
+    common_name:      document.getElementById("f-common").value.trim(),
+    scientific_name:  document.getElementById("f-sci").value.trim(),
+    family:           document.getElementById("f-family").value.trim(),
+    region:           document.getElementById("f-region").value.trim(),
+    month:            document.getElementById("f-month").value.trim(),
+    season:           document.getElementById("f-season").value.trim(),
+    habitat:          document.getElementById("f-habitat").value.trim(),
+    field_marks:      document.getElementById("f-marks").value.trim(),
+    description:      document.getElementById("f-desc").value.trim(),
+    song_description: document.getElementById("f-song-desc").value.trim(),
+    call_description: document.getElementById("f-call-desc").value.trim(),
+    image_urls:       JSON.stringify(allImgs),
+    song_urls:        JSON.stringify(allSongs),
+    call_urls:        JSON.stringify(allCalls),
+  };
+
+  const id = document.getElementById("f-id").value;
+  let error;
+  if (id) {
+    ({ error } = await supabase.from("birds").update(payload).eq("id", parseInt(id)));
+  } else {
+    ({ error } = await supabase.from("birds").insert([payload]));
+  }
+
+  btn.disabled=false; btn.textContent="Save bird";
+  if (error) { showModalAlert(`Error saving: ${error.message}`); return; }
+  closeForm();
+  showAlert(id ? "Bird updated successfully." : "Bird added successfully.");
+  await loadBirds();
+}
+
+async function deleteBird() {
+  const id = document.getElementById("f-id").value;
+  if (!id) return;
+  const name = document.getElementById("f-common").value;
+  if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+  const { error } = await supabase.from("birds").delete().eq("id",parseInt(id));
+  if (error) { showModalAlert(`Error deleting: ${error.message}`); return; }
+  closeForm();
+  showAlert(`"${name}" deleted.`);
+  await loadBirds();
+}
+
+// Close modal on overlay click
+document.getElementById("modal-overlay").addEventListener("click", function(e){
+  if (e.target===this) closeForm();
+});
+
+loadBirds();
+</script>
+</body>
+</html>
