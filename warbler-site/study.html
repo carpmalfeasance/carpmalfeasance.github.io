@@ -179,6 +179,7 @@ function renderDetail(bird) {
 
     <div class="fact-row">
       ${bird.family  ? `<div class="fact-chip"><strong>Family</strong>${bird.family}</div>` : ""}
+      ${bird.gender  ? `<div class="fact-chip"><strong>Gender</strong>${bird.gender}</div>` : ""}
       ${bird.region  ? `<div class="fact-chip"><strong>Region</strong>${bird.region}</div>` : ""}
       ${bird.season  ? `<div class="fact-chip"><strong>Season</strong>${bird.season}</div>` : ""}
       ${bird.month   ? `<div class="fact-chip"><strong>Month</strong>${bird.month}</div>`  : ""}
