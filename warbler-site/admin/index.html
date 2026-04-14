@@ -40,6 +40,7 @@
             <th>Photo</th>
             <th>Common name</th>
             <th>Scientific name</th>
+            <th>Gender/Age</th>
             <th>Family</th>
             <th>Region</th>
             <th>Month</th>
@@ -82,7 +83,10 @@
           <label>Scientific name</label>
           <input type="text" id="f-sci" placeholder="e.g. Setophaga pinus" />
         </div>
-      </div>
+        <div class="form-group">
+          <label>Gender/Age</label>
+          <input type="text" id="f-gender" placeholder="e.g. Female" />
+        </div>
       <div class="form-row">
         <div class="form-group">
           <label>Family</label>
@@ -245,6 +249,7 @@ function openForm(id) {
     document.getElementById("f-id").value         = bird.id;
     document.getElementById("f-common").value     = bird.common_name||"";
     document.getElementById("f-sci").value        = bird.scientific_name||"";
+    document.getElementById("f-gender").value     = bird.gender||"";
     document.getElementById("f-family").value     = bird.family||"";
     document.getElementById("f-region").value     = bird.region||"";
     document.getElementById("f-month").value      = bird.month||"";
@@ -355,6 +360,7 @@ async function saveBird(e) {
   const payload = {
     common_name:      document.getElementById("f-common").value.trim(),
     scientific_name:  document.getElementById("f-sci").value.trim(),
+    gender:           document.getElementById("f-gender").value.trim(),
     family:           document.getElementById("f-family").value.trim(),
     region:           document.getElementById("f-region").value.trim(),
     month:            document.getElementById("f-month").value.trim(),
